@@ -19,7 +19,10 @@
   a git-less copy nested in another repository stamps `unknown` instead
   of that repository's HEAD; the nested-`.syncignore` guard no longer
   misses a final line lacking a trailing newline.
-- `tests/run_smoke.py`: six new tests (28 total).
+- `tests/run_smoke.py`: six new tests (28 total), plus a test for the
+  0.2.0 PyYAML import guard in `check_baseline.py` (29 total) — run via
+  `python -S` against a copy with no `_vendor/` sibling, so the import
+  failure is deterministic on hosts with PyYAML installed.
 
 ## 0.2.0 — 2026-06-10
 

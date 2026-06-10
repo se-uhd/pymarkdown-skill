@@ -430,6 +430,27 @@ def test_check_baseline_help():
     assert "lint_markdown.yaml" in r.stdout
 
 
+def test_check_baseline_missing_pyyaml_exits_2():
+    # The import guard must turn a missing PyYAML into exit 2 with a
+    # message, not an ImportError traceback (exit 1). Copy the script
+    # where no _vendor/ sibling exists and run it with -S so the host's
+    # site-packages PyYAML (if any) is not importable either — the only
+    # deterministic way to exercise the guard on an arbitrary host.
+    with tempfile.TemporaryDirectory() as d:
+        script = Path(d) / "check_baseline.py"
+        script.write_bytes(CHECK_BASELINE.read_bytes())
+        target = Path(d) / "x.yaml"
+        target.write_text("extensions: {}\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, "-S", str(script), str(target)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 2, \
+            f"expected 2, got {r.returncode}\nstderr:{r.stderr}"
+        assert "PyYAML not importable" in r.stderr, r.stderr
+        assert "Traceback" not in r.stderr, r.stderr
+
+
 # --- refresh_vendor ---
 
 def test_refresh_vendor_help():
@@ -500,6 +521,8 @@ if __name__ == "__main__":
         ("test_check_baseline_falsy_shape_exits_2",
          test_check_baseline_falsy_shape_exits_2),
         ("test_check_baseline_help", test_check_baseline_help),
+        ("test_check_baseline_missing_pyyaml_exits_2",
+         test_check_baseline_missing_pyyaml_exits_2),
         ("test_refresh_vendor_help", test_refresh_vendor_help),
         ("test_missing_config_yields_clear_error",
          test_missing_config_yields_clear_error),
