@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- `src/lint_markdown.py` pre-pass: frontmatter handling now follows the
+  config handed to pymarkdown — no `unclosed-frontmatter` when the
+  front-matter extension is not enabled, and `allow_blank_lines: true`
+  is respected. Structurally closed blocks are YAML-validated the same
+  way pymarkdown validates them, so fences inside a block pymarkdown
+  demotes to body text are tracked again. When pymarkdown itself fails
+  on a file (e.g. the 0.9.37 crash on a leading `---` without a final
+  newline), the wrapper still prints its pre-pass and schema findings
+  before exiting 2.
+- `src/check_baseline.py`: falsy non-mapping shapes (`extensions: []`,
+  a `false` document) now exit 2 like their truthy counterparts.
+- `sync/sync_to_skill.sh`: verifies every sync source exists before
+  deleting anything in the target; the version stamp trusts git
+  metadata only when the upstream tree is the repository toplevel, so
+  a git-less copy nested in another repository stamps `unknown` instead
+  of that repository's HEAD; the nested-`.syncignore` guard no longer
+  misses a final line lacking a trailing newline.
+- `tests/run_smoke.py`: six new tests (28 total).
+
 ## 0.2.0 — 2026-06-10
 
 - `src/lint_markdown.py`: invoke PyMarkdown with the `explicit`

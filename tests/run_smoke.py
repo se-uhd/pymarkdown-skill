@@ -190,6 +190,108 @@ def test_non_markdown_extension_exits_2():
         assert "did not scan" in err, f"expected explanation; got:\n{err}"
 
 
+ALLOW_BLANKS_YAML = (
+    "extensions:\n"
+    "  front-matter:\n"
+    "    enabled: true\n"
+    "    allow_blank_lines: true\n"
+    "  markdown-tables: {enabled: true}\n"
+    "  markdown-task-list-items: {enabled: true}\n"
+    "  markdown-strikethrough: {enabled: true}\n"
+    "  markdown-extended-autolinks: {enabled: true}\n"
+    "plugins:\n"
+    "  md013: {enabled: false}\n"
+    "  md033: {enabled: false}\n"
+    "  md041: {enabled: false}\n"
+)
+
+FRONTMATTER_OFF_YAML = (
+    "extensions:\n"
+    "  front-matter: {enabled: false}\n"
+    "plugins:\n"
+    "  md013: {enabled: false}\n"
+    "  md033: {enabled: false}\n"
+    "  md041: {enabled: false}\n"
+)
+
+
+def test_allow_blank_lines_config_respected():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Path(d) / "cfg.yaml"
+        cfg.write_text(ALLOW_BLANKS_YAML, encoding="utf-8")
+        p = Path(d) / "fm.md"
+        # With allow_blank_lines pymarkdown accepts the blank inside the
+        # frontmatter, so the pre-pass must not flag it. No `title:` key:
+        # md025 would count it as the document's top-level heading.
+        p.write_text("---\ngenre: a\n\nauthor: x\n---\n\n# Heading\n",
+                     encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(LINT), "--config", str(cfg), str(p)],
+            capture_output=True, text=True,
+        )
+        assert "unclosed-frontmatter" not in r.stdout, \
+            f"false positive:\n{r.stdout}"
+        assert r.returncode == 0, \
+            f"expected 0, got {r.returncode}:\n{r.stdout}\n{r.stderr}"
+
+
+def test_frontmatter_disabled_config_skips_check():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Path(d) / "cfg.yaml"
+        cfg.write_text(FRONTMATTER_OFF_YAML, encoding="utf-8")
+        p = Path(d) / "doc.md"
+        # With the extension disabled, pymarkdown parses the leading ---
+        # as a thematic break; "abandoned frontmatter" is meaningless.
+        p.write_text("---\ntitle: hi\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(LINT), "--config", str(cfg), str(p)],
+            capture_output=True, text=True,
+        )
+        assert "unclosed-frontmatter" not in r.stdout, \
+            f"false positive:\n{r.stdout}"
+        assert r.returncode == 0, \
+            f"expected 0, got {r.returncode}:\n{r.stdout}\n{r.stderr}"
+
+
+def test_invalid_yaml_frontmatter_fences_tracked():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "invalid_fm.md"
+        # The block is structurally closed but "```" is YAML-invalid as
+        # frontmatter (a bare string), so pymarkdown re-parses the whole
+        # block as body text — making line 2 a real fence opener that
+        # never closes.
+        p.write_text("---\n```\n---\ntext\n", encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert rc == 1
+        assert "unclosed-fence" in out, f"expected unclosed-fence:\n{out}"
+
+
+def test_valid_frontmatter_with_fence_string_is_clean():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "fence_str.md"
+        # No `title:` key: md025 would count it as the top-level heading.
+        p.write_text(
+            '---\nname: hi\nexample: "```"\n---\n\n# Heading\n',
+            encoding="utf-8",
+        )
+        rc, out, _ = run_lint(p)
+        assert "unclosed-fence" not in out, f"false positive:\n{out}"
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_prepass_findings_survive_pymarkdown_crash():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "no_newline.md"
+        # pymarkdown 0.9.37 crashes on a leading --- without a final
+        # newline; the wrapper must exit 2 but still print the pre-pass
+        # diagnosis instead of swallowing it.
+        p.write_bytes(b"---\ntitle: hi")
+        rc, out, err = run_lint(p)
+        assert rc == 2, f"expected 2, got {rc}\nstdout:{out}\nstderr:{err}"
+        assert "unclosed-frontmatter" in out, \
+            f"pre-pass finding suppressed:\n{out}\n{err}"
+
+
 # --- schema_checks integration ---
 
 def test_schema_checks_loaded_when_present():
@@ -305,6 +407,20 @@ def test_check_baseline_wrong_shape_exits_2():
         assert "mapping" in r.stderr
 
 
+def test_check_baseline_falsy_shape_exits_2():
+    with tempfile.TemporaryDirectory() as d:
+        bad = Path(d) / "falsy.yaml"
+        # An empty list is falsy; it must hit the same shape error as a
+        # non-empty one, not be coerced to an empty mapping.
+        bad.write_text("extensions: []\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(CHECK_BASELINE), str(bad)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 2, f"expected 2, got {r.returncode}\n{r.stderr}"
+        assert "mapping" in r.stderr
+
+
 def test_check_baseline_help():
     r = subprocess.run(
         [sys.executable, str(CHECK_BASELINE), "--help"],
@@ -360,6 +476,16 @@ if __name__ == "__main__":
          test_frontmatter_abandoned_despite_later_dashes),
         ("test_non_markdown_extension_exits_2",
          test_non_markdown_extension_exits_2),
+        ("test_allow_blank_lines_config_respected",
+         test_allow_blank_lines_config_respected),
+        ("test_frontmatter_disabled_config_skips_check",
+         test_frontmatter_disabled_config_skips_check),
+        ("test_invalid_yaml_frontmatter_fences_tracked",
+         test_invalid_yaml_frontmatter_fences_tracked),
+        ("test_valid_frontmatter_with_fence_string_is_clean",
+         test_valid_frontmatter_with_fence_string_is_clean),
+        ("test_prepass_findings_survive_pymarkdown_crash",
+         test_prepass_findings_survive_pymarkdown_crash),
         ("test_schema_checks_loaded_when_present",
          test_schema_checks_loaded_when_present),
         ("test_runs_without_schema_checks", test_runs_without_schema_checks),
@@ -371,6 +497,8 @@ if __name__ == "__main__":
          test_check_baseline_rejects_string_enabled),
         ("test_check_baseline_wrong_shape_exits_2",
          test_check_baseline_wrong_shape_exits_2),
+        ("test_check_baseline_falsy_shape_exits_2",
+         test_check_baseline_falsy_shape_exits_2),
         ("test_check_baseline_help", test_check_baseline_help),
         ("test_refresh_vendor_help", test_refresh_vendor_help),
         ("test_missing_config_yields_clear_error",

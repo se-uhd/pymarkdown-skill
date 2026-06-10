@@ -81,7 +81,9 @@ if [[ -f "$syncignore" ]]; then
     done
     # A .syncignore entry nested under a synced directory cannot be
     # preserved: the whole directory is removed and re-copied below.
-    while IFS= read -r line; do
+    # `|| [[ -n "$line" ]]` keeps a final line without a trailing
+    # newline from being skipped.
+    while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" == \#* ]] && continue
         for d in "${sync_dirs[@]}"; do
             if [[ "$line" == "$d/"?* ]]; then
@@ -93,6 +95,23 @@ if [[ -f "$syncignore" ]]; then
         done
     done < "$syncignore"
 fi
+
+# Verify every sync source exists before touching the target: the copy
+# phase deletes target directories first, so a missing source (e.g. an
+# interrupted refresh_vendor.py leaving no _vendor/) must abort while
+# the target is still intact.
+for f in "${sync_files[@]}"; do
+    if [[ ! -f "$src/$f" ]]; then
+        echo "sync_to_skill.sh: missing source file: $src/$f" >&2
+        exit 2
+    fi
+done
+for d in "${sync_dirs[@]}"; do
+    if [[ ! -d "$src/$d" ]]; then
+        echo "sync_to_skill.sh: missing source directory: $src/$d" >&2
+        exit 2
+    fi
+done
 
 for d in "${sync_dirs[@]}"; do
     if [[ -d "$target/$d" ]]; then rm -rf "$target/$d"; fi
@@ -111,11 +130,21 @@ for d in "${sync_dirs[@]}"; do
 done
 
 version="$(cat "$upstream/VERSION" 2>/dev/null || echo unknown)"
-sha="$(git -C "$upstream" rev-parse HEAD 2>/dev/null || echo unknown)"
-if [[ "$sha" != unknown && -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
-    sha="${sha}-dirty"
-    echo "sync_to_skill.sh: warning: upstream working tree has" \
-         "uncommitted changes; stamping ${sha:0:12}…-dirty" >&2
+# Only trust git metadata when the upstream tree is itself a repository
+# toplevel: git walks up to the nearest enclosing repo, so a git-less
+# copy of this tree nested inside some other repository would otherwise
+# stamp that repository's HEAD.
+upstream_phys="$(cd "$upstream" && pwd -P)"
+toplevel="$(git -C "$upstream" rev-parse --show-toplevel 2>/dev/null || echo '')"
+if [[ -n "$toplevel" && "$toplevel" == "$upstream_phys" ]]; then
+    sha="$(git -C "$upstream" rev-parse HEAD)"
+    if [[ -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
+        sha="${sha}-dirty"
+        echo "sync_to_skill.sh: warning: upstream working tree has" \
+             "uncommitted changes; stamping ${sha:0:12}…-dirty" >&2
+    fi
+else
+    sha=unknown
 fi
 printf '%s %s\n' "$version" "$sha" > "$target/.pymarkdown-skill-version"
 
