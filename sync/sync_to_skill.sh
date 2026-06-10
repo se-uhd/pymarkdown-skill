@@ -133,12 +133,18 @@ version="$(cat "$upstream/VERSION" 2>/dev/null || echo unknown)"
 # Only trust git metadata when the upstream tree is itself a repository
 # toplevel: git walks up to the nearest enclosing repo, so a git-less
 # copy of this tree nested inside some other repository would otherwise
-# stamp that repository's HEAD.
-upstream_phys="$(cd "$upstream" && pwd -P)"
+# stamp that repository's HEAD. Compared with -ef (device+inode), not
+# string equality: case-variant paths on a case-insensitive filesystem
+# must still match.
 toplevel="$(git -C "$upstream" rev-parse --show-toplevel 2>/dev/null || echo '')"
-if [[ -n "$toplevel" && "$toplevel" == "$upstream_phys" ]]; then
-    sha="$(git -C "$upstream" rev-parse HEAD)"
-    if [[ -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
+if [[ -n "$toplevel" && "$toplevel" -ef "$upstream" ]]; then
+    # rev-parse fails on an unborn HEAD (git init, no commits); fall
+    # back to unknown instead of dying mid-sync under set -e. --verify
+    # keeps stdout empty on failure (bare rev-parse echoes "HEAD").
+    sha="$(git -C "$upstream" rev-parse --verify HEAD 2>/dev/null \
+           || echo unknown)"
+    if [[ "$sha" != unknown ]] \
+    && [[ -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
         sha="${sha}-dirty"
         echo "sync_to_skill.sh: warning: upstream working tree has" \
              "uncommitted changes; stamping ${sha:0:12}…-dirty" >&2

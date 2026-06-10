@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- `src/lint_markdown.py`: the config is read in binary so PyYAML's BOM
+  detection applies — a UTF-16 config, which pymarkdown itself accepts,
+  no longer crashes the wrapper with an uncaught UnicodeDecodeError.
+  The `unclosed-frontmatter` message under `allow_blank_lines: true` no
+  longer claims pymarkdown "silently" demotes the block; in that mode
+  pymarkdown 0.9.37 errors out on any unclosed block (the wrapper exits
+  2 and still prints the finding).
+- `sync/sync_to_skill.sh`: an upstream repository with an unborn HEAD
+  (`git init`, no commits) stamps `unknown` instead of dying mid-sync
+  under `set -e` after the target was already overwritten; the
+  toplevel comparison uses `-ef` (device and inode) instead of string
+  equality, so a case-variant path on a case-insensitive filesystem no
+  longer stamps `unknown` spuriously.
+- `tests/run_smoke.py`: UTF-16 config regression test (30 total).
+
 ## 0.2.1 — 2026-06-10
 
 - `src/lint_markdown.py` pre-pass: frontmatter handling now follows the

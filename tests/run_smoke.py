@@ -279,6 +279,26 @@ def test_valid_frontmatter_with_fence_string_is_clean():
         assert rc == 0, f"expected 0, got {rc}:\n{out}"
 
 
+def test_utf16_config_is_honored_not_crashed():
+    with tempfile.TemporaryDirectory() as d:
+        cfg = Path(d) / "cfg16.yaml"
+        # pymarkdown reads configs in binary and lets PyYAML detect the
+        # BOM, so a UTF-16 config is legal; the wrapper's settings
+        # reader must cope (and actually honor it), not crash.
+        cfg.write_bytes(DEFAULT_YAML.read_text(encoding="utf-8")
+                        .encode("utf-16"))
+        p = Path(d) / "fm.md"
+        p.write_text("---\ntitle: hi\n\n# Heading\n", encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(LINT), "--config", str(cfg), str(p)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 1, \
+            f"expected 1, got {r.returncode}\n{r.stdout}\n{r.stderr}"
+        assert "unclosed-frontmatter" in r.stdout, \
+            f"settings not honored:\n{r.stdout}"
+
+
 def test_prepass_findings_survive_pymarkdown_crash():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "no_newline.md"
@@ -505,6 +525,8 @@ if __name__ == "__main__":
          test_invalid_yaml_frontmatter_fences_tracked),
         ("test_valid_frontmatter_with_fence_string_is_clean",
          test_valid_frontmatter_with_fence_string_is_clean),
+        ("test_utf16_config_is_honored_not_crashed",
+         test_utf16_config_is_honored_not_crashed),
         ("test_prepass_findings_survive_pymarkdown_crash",
          test_prepass_findings_survive_pymarkdown_crash),
         ("test_schema_checks_loaded_when_present",
