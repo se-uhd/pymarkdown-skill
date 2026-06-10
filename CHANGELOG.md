@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 — 2026-06-10
 
 - `src/lint_markdown.py`: the config is read in binary so PyYAML's BOM
   detection applies — a UTF-16 config, which pymarkdown itself accepts,
