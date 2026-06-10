@@ -4,9 +4,8 @@ Copyright (c) 2026 Sebastian Baltes
 
 This license applies to the first-party content of this repository.
 Third-party software bundled under `src/_vendor/` is distributed
-verbatim under its own licenses (MIT, BSD-3-Clause, Apache-2.0,
-PSF-2.0). See `src/_vendor/NOTICE` for per-package attribution and
-full license texts.
+verbatim under its own licenses; see `src/_vendor/NOTICE` for the
+authoritative per-package attribution and full license texts.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

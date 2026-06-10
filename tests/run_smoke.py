@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """run_smoke.py — pymarkdown-skill upstream smoke tests.
 
-Exercises the canonical lint_markdown.py and refresh_vendor.py end-to-end
-via subprocess. Skill-specific schema checks are covered in each consuming
-skill's own test suite.
+Exercises the canonical lint_markdown.py, check_baseline.py, and
+refresh_vendor.py via subprocess (refresh_vendor.py only as far as its
+--help; the full vendoring flow needs the network). Skill-specific
+schema checks are covered in each consuming skill's own test suite.
 
 Exit codes
 ----------
@@ -24,7 +25,7 @@ DEFAULT_YAML = SRC / "lint_markdown.default.yaml"
 
 def run_lint(md_path, extra=()):
     """Invoke lint_markdown.py via subprocess; return (rc, stdout, stderr)."""
-    cmd = ["python3", str(LINT), "--config", str(DEFAULT_YAML),
+    cmd = [sys.executable, str(LINT), "--config", str(DEFAULT_YAML),
            *extra, str(md_path)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     return r.returncode, r.stdout, r.stderr
@@ -120,6 +121,75 @@ def test_pre_pass_unclosed_frontmatter():
         assert "unclosed-frontmatter" in out
 
 
+def test_pre_pass_unclosed_tilde_fence():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "tilde.md"
+        p.write_text("# Heading\n\n~~~python\nprint('hi')\n",
+                     encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert rc == 1
+        assert "unclosed-fence" in out, f"expected unclosed-fence; got:\n{out}"
+
+
+def test_tilde_fence_containing_backticks_is_clean():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "nested.md"
+        # A literal ``` line inside a closed tilde fence is content, not
+        # an opener — the canonical reason tilde fences exist.
+        p.write_text(
+            "# Heading\n\n~~~markdown\n```python\nprint('hi')\n```\n~~~\n",
+            encoding="utf-8",
+        )
+        rc, out, _ = run_lint(p)
+        assert "unclosed-fence" not in out, f"false positive:\n{out}"
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_indented_fence_closer_is_clean():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "indent.md"
+        # CommonMark allows fence lines to be indented up to 3 spaces.
+        p.write_text("# Heading\n\n```text\ncode\n  ```\n",
+                     encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert "unclosed-fence" not in out, f"false positive:\n{out}"
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_leading_thematic_break_is_not_frontmatter():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "thematic.md"
+        # `---` followed by a blank line is a thematic break, which
+        # pymarkdown parses without complaint; the pre-pass must not
+        # flag it as abandoned frontmatter.
+        p.write_text("---\n\nSome text.\n", encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert "unclosed-frontmatter" not in out, f"false positive:\n{out}"
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_frontmatter_abandoned_despite_later_dashes():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "abandoned.md"
+        # pymarkdown abandons frontmatter at the first blank line, so the
+        # `---` further down does not close it; the pre-pass must flag
+        # this even though a later `---` exists.
+        p.write_text("---\ntitle: hi\n\nbody text\n\n---\n",
+                     encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert rc == 1
+        assert "unclosed-frontmatter" in out, f"expected flag; got:\n{out}"
+
+
+def test_non_markdown_extension_exits_2():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "notes.txt"
+        p.write_text("# Heading\n", encoding="utf-8")
+        rc, out, err = run_lint(p)
+        assert rc == 2, f"expected 2, got {rc}\nstdout:{out}\nstderr:{err}"
+        assert "did not scan" in err, f"expected explanation; got:\n{err}"
+
+
 # --- schema_checks integration ---
 
 def test_schema_checks_loaded_when_present():
@@ -142,7 +212,7 @@ def test_schema_checks_loaded_when_present():
         target = d / "x.md"
         target.write_text("# Heading\n", encoding="utf-8")
         r = subprocess.run(
-            ["python3", str(staging / "lint_markdown.py"),
+            [sys.executable, str(staging / "lint_markdown.py"),
              "--config", str(staging / "lint_markdown.default.yaml"),
              str(target)],
             capture_output=True, text=True,
@@ -165,7 +235,7 @@ def test_runs_without_schema_checks():
 
 def test_check_baseline_default_yaml_passes():
     r = subprocess.run(
-        ["python3", str(CHECK_BASELINE), str(DEFAULT_YAML)],
+        [sys.executable, str(CHECK_BASELINE), str(DEFAULT_YAML)],
         capture_output=True, text=True,
     )
     assert r.returncode == 0, r.stderr
@@ -188,18 +258,67 @@ def test_check_baseline_flags_missing_disable():
             encoding="utf-8",
         )
         r = subprocess.run(
-            ["python3", str(CHECK_BASELINE), str(bad)],
+            [sys.executable, str(CHECK_BASELINE), str(bad)],
             capture_output=True, text=True,
         )
         assert r.returncode == 1, r.stderr
         assert "md033" in r.stderr
 
 
+def test_check_baseline_rejects_string_enabled():
+    with tempfile.TemporaryDirectory() as d:
+        bad = Path(d) / "stringy.yaml"
+        # PyMarkdown requires a boolean; the string "true" leaves the
+        # extension disabled, so the baseline check must flag it.
+        bad.write_text(
+            'extensions:\n'
+            '  front-matter: {enabled: "true"}\n'
+            '  markdown-tables: {enabled: true}\n'
+            '  markdown-task-list-items: {enabled: true}\n'
+            '  markdown-strikethrough: {enabled: true}\n'
+            '  markdown-extended-autolinks: {enabled: true}\n'
+            'plugins:\n'
+            '  md013: {enabled: false}\n'
+            '  md033: {enabled: false}\n'
+            '  md041: {enabled: false}\n',
+            encoding="utf-8",
+        )
+        r = subprocess.run(
+            [sys.executable, str(CHECK_BASELINE), str(bad)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 1, r.stderr
+        assert "front-matter" in r.stderr
+        assert "boolean" in r.stderr
+
+
+def test_check_baseline_wrong_shape_exits_2():
+    with tempfile.TemporaryDirectory() as d:
+        bad = Path(d) / "shape.yaml"
+        bad.write_text("extensions:\n  - front-matter\n  - markdown-tables\n",
+                       encoding="utf-8")
+        r = subprocess.run(
+            [sys.executable, str(CHECK_BASELINE), str(bad)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 2, f"expected 2, got {r.returncode}\n{r.stderr}"
+        assert "mapping" in r.stderr
+
+
+def test_check_baseline_help():
+    r = subprocess.run(
+        [sys.executable, str(CHECK_BASELINE), "--help"],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, r.stderr
+    assert "lint_markdown.yaml" in r.stdout
+
+
 # --- refresh_vendor ---
 
 def test_refresh_vendor_help():
     r = subprocess.run(
-        ["python3", str(SRC / "refresh_vendor.py"), "--help"],
+        [sys.executable, str(SRC / "refresh_vendor.py"), "--help"],
         capture_output=True, text=True,
     )
     assert r.returncode == 0
@@ -212,7 +331,7 @@ def test_missing_config_yields_clear_error():
         p.write_text("# Heading\n", encoding="utf-8")
         bad = Path(d) / "does-not-exist.yaml"
         r = subprocess.run(
-            ["python3", str(LINT), "--config", str(bad), str(p)],
+            [sys.executable, str(LINT), "--config", str(bad), str(p)],
             capture_output=True, text=True,
         )
         assert r.returncode == 2, f"expected 2, got {r.returncode}\n{r.stderr}"
@@ -229,6 +348,18 @@ if __name__ == "__main__":
         ("test_pre_pass_unclosed_fence", test_pre_pass_unclosed_fence),
         ("test_pre_pass_unclosed_frontmatter",
          test_pre_pass_unclosed_frontmatter),
+        ("test_pre_pass_unclosed_tilde_fence",
+         test_pre_pass_unclosed_tilde_fence),
+        ("test_tilde_fence_containing_backticks_is_clean",
+         test_tilde_fence_containing_backticks_is_clean),
+        ("test_indented_fence_closer_is_clean",
+         test_indented_fence_closer_is_clean),
+        ("test_leading_thematic_break_is_not_frontmatter",
+         test_leading_thematic_break_is_not_frontmatter),
+        ("test_frontmatter_abandoned_despite_later_dashes",
+         test_frontmatter_abandoned_despite_later_dashes),
+        ("test_non_markdown_extension_exits_2",
+         test_non_markdown_extension_exits_2),
         ("test_schema_checks_loaded_when_present",
          test_schema_checks_loaded_when_present),
         ("test_runs_without_schema_checks", test_runs_without_schema_checks),
@@ -236,6 +367,11 @@ if __name__ == "__main__":
          test_check_baseline_default_yaml_passes),
         ("test_check_baseline_flags_missing_disable",
          test_check_baseline_flags_missing_disable),
+        ("test_check_baseline_rejects_string_enabled",
+         test_check_baseline_rejects_string_enabled),
+        ("test_check_baseline_wrong_shape_exits_2",
+         test_check_baseline_wrong_shape_exits_2),
+        ("test_check_baseline_help", test_check_baseline_help),
         ("test_refresh_vendor_help", test_refresh_vendor_help),
         ("test_missing_config_yields_clear_error",
          test_missing_config_yields_clear_error),

@@ -30,14 +30,18 @@ sync/sync_to_skill.sh --target /path/to/skill/scripts/
 ```
 
 The sync overwrites `lint_markdown.py`, `refresh_vendor.py`,
-`check_baseline.py`, `_vendor/`, and `bundled_licenses/`. It refuses to
-touch the files each skill owns: `schema_checks.py`,
-`lint_markdown.yaml`, and `tests/` (see `sync/.syncignore`). The target
-directory must contain a `schema_checks.py` for sync to run; that is
-the marker that says "this is a skill".
+`check_baseline.py`, `_vendor/`, and `bundled_licenses/` — a hardcoded
+list in the script. The files each skill owns — `schema_checks.py`,
+`lint_markdown.yaml`, and `tests/` — are never part of that list;
+`sync/.syncignore` records them, and the script refuses to run if the
+two sets ever overlap or if a `.syncignore` entry is nested inside a
+synced directory. The target directory must contain a
+`schema_checks.py` for sync to run; that is the marker that says "this
+is a skill".
 
-A `.pymarkdown-skill-version` file is dropped at the target so drift
-against upstream is detectable.
+A `.pymarkdown-skill-version` file (release version plus upstream HEAD
+SHA, with a `-dirty` suffix when synced from an uncommitted tree) is
+dropped at the target so drift against upstream is detectable.
 
 ## The customization seam
 
@@ -120,6 +124,7 @@ skill's own test suite.
 First-party content is MIT-licensed. See [`LICENSE`](LICENSE).
 
 Third-party software bundled under `src/_vendor/` is distributed
-verbatim under its own licenses (MIT, BSD-3-Clause, Apache-2.0,
-PSF-2.0). See [`src/_vendor/NOTICE`](src/_vendor/NOTICE) for
-per-package attribution and full license texts.
+verbatim under its own licenses (currently MIT, BSD-3-Clause, and
+PSF-2.0). [`src/_vendor/NOTICE`](src/_vendor/NOTICE) is the
+authoritative per-package list, with attribution and full license
+texts.

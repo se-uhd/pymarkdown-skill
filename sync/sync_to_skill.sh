@@ -3,8 +3,10 @@
 #
 # Propagate the canonical pymarkdown-skill files into a target skill's
 # scripts/ directory. Refuses to run if the target has no schema_checks.py
-# (the marker that this is a skill); refuses to overwrite anything listed
-# in .syncignore.
+# (the marker that this is a skill). The sync set is hardcoded below;
+# .syncignore lists the files each skill owns, and the script refuses to
+# run if the two sets ever overlap (it does not consult .syncignore
+# during the copy itself).
 set -euo pipefail
 
 usage() {
@@ -23,7 +25,9 @@ Preserves in the target (listed in .syncignore):
   lint_markdown.yaml
   tests/
 
-Stamps the target with .pymarkdown-skill-version (the upstream HEAD SHA).
+Stamps the target with .pymarkdown-skill-version, containing
+"<version> <HEAD SHA>"; the SHA gets a -dirty suffix when the upstream
+working tree has uncommitted changes.
 EOF
 }
 
@@ -75,6 +79,19 @@ if [[ -f "$syncignore" ]]; then
             exit 2
         fi
     done
+    # A .syncignore entry nested under a synced directory cannot be
+    # preserved: the whole directory is removed and re-copied below.
+    while IFS= read -r line; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        for d in "${sync_dirs[@]}"; do
+            if [[ "$line" == "$d/"?* ]]; then
+                echo "sync_to_skill.sh: inconsistency:" >&2
+                echo "  '$line' in .syncignore is nested under synced" \
+                     "directory '$d/' and would be destroyed" >&2
+                exit 2
+            fi
+        done
+    done < "$syncignore"
 fi
 
 for d in "${sync_dirs[@]}"; do
@@ -86,9 +103,20 @@ for f in "${sync_files[@]}"; do
 done
 for d in "${sync_dirs[@]}"; do
     cp -R "$src/$d" "$target/$d"
+    # cp -R also copies any bytecode caches the upstream working tree
+    # accumulated from local runs; consuming skills must get the same
+    # pycache-free tree refresh_vendor.py produces.
+    find "$target/$d" -name '__pycache__' -type d -prune -exec rm -rf {} +
+    find "$target/$d" -name '*.py[co]' -type f -delete
 done
 
+version="$(cat "$upstream/VERSION" 2>/dev/null || echo unknown)"
 sha="$(git -C "$upstream" rev-parse HEAD 2>/dev/null || echo unknown)"
-printf '%s\n' "$sha" > "$target/.pymarkdown-skill-version"
+if [[ "$sha" != unknown && -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
+    sha="${sha}-dirty"
+    echo "sync_to_skill.sh: warning: upstream working tree has" \
+         "uncommitted changes; stamping ${sha:0:12}…-dirty" >&2
+fi
+printf '%s %s\n' "$version" "$sha" > "$target/.pymarkdown-skill-version"
 
-echo "synced pymarkdown-skill@${sha:0:12} into $target" >&2
+echo "synced pymarkdown-skill ${version}@${sha:0:12} into $target" >&2

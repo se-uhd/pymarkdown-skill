@@ -14,3 +14,7 @@
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# refresh_vendor.py staging / swap-backup trees
+src/_vendor.new/
+src/_vendor.old/
