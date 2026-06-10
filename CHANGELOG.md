@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-06-10
 
 - `src/lint_markdown.py` pre-pass: frontmatter handling now follows the
   config handed to pymarkdown — no `unclosed-frontmatter` when the
