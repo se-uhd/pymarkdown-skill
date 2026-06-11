@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `.github/workflows/smoke.yml`: bump `actions/checkout` to v5 and
+  `actions/setup-python` to v6 (off Node.js 20), and pin Python to
+  the latest stable (3.14), matching the consuming skills' CI.
+
 ## 0.2.2 — 2026-06-10
 
 - `src/lint_markdown.py`: the config is read in binary so PyYAML's BOM
