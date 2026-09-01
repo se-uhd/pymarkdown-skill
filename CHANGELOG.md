@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 — 2026-09-01
+
+- `src/refresh_vendor.py`: two comments restated without literal em-dash
+  glyphs; no behavior change. (Same sweep as 0.2.3, which had covered
+  only `lint_markdown.py`.)
+
 ## 0.2.3 — 2026-09-01
 
 - `src/lint_markdown.py`: docstrings and comments restated without
