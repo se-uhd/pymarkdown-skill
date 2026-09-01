@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-09-01
 
 - `src/lint_markdown.py`: docstrings and comments restated without
   literal em-dash glyphs and without "surface" as a verb; no behavior
