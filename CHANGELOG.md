@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `src/lint_markdown.py`: docstrings and comments restated without
+  literal em-dash glyphs and without "surface" as a verb; no behavior
+  change. (Applied in the consuming ai-slop-skill repo and synced back.)
 - `.github/workflows/smoke.yml`: bump `actions/checkout` to v5 and
   `actions/setup-python` to v6 (off Node.js 20), and pin Python to
   the latest stable (3.14), matching the consuming skills' CI.
