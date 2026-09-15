@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.5 — 2026-09-15
+
+- `src/lint_markdown.py`, `src/check_baseline.py`, and
+  `src/refresh_vendor.py`: docstrings and comments restated without
+  semicolons that join clauses, colons before a complete sentence, or
+  *whose* clauses on things, as flagged by a prose review of the
+  consuming ai-slop-skill repo. The `refresh_vendor.py` module docstring
+  now gives its steps as a numbered list in the order the code runs
+  them. No behavior change.
+
 ## 0.2.4 — 2026-09-01
 
 - `src/refresh_vendor.py`: two comments restated without literal em-dash
