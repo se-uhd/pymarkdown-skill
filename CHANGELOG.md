@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.6 — 2026-09-15
+
+- `src/refresh_vendor.py` and `src/_vendor/pyjson5/__init__.py`: the
+  pyjson5 shim docstring restated without a semicolon that joins
+  clauses and without "bake into". The `PYJSON5_SHIM` constant and the
+  vendored shim changed together and stay byte-identical. These are the
+  two findings from the same prose review that 0.2.5 left out, because
+  the text is a string constant rather than a comment. No behavior
+  change.
+
 ## 0.2.5 — 2026-09-15
 
 - `src/lint_markdown.py`, `src/check_baseline.py`, and
