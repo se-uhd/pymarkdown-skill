@@ -414,9 +414,9 @@ def test_check_baseline_rejects_string_enabled():
         assert "boolean" in r.stderr
 
 
-def test_check_baseline_wrong_shape_exits_2():
+def test_check_baseline_non_mapping_exits_2():
     with tempfile.TemporaryDirectory() as d:
-        bad = Path(d) / "shape.yaml"
+        bad = Path(d) / "list.yaml"
         bad.write_text("extensions:\n  - front-matter\n  - markdown-tables\n",
                        encoding="utf-8")
         r = subprocess.run(
@@ -427,11 +427,11 @@ def test_check_baseline_wrong_shape_exits_2():
         assert "mapping" in r.stderr
 
 
-def test_check_baseline_falsy_shape_exits_2():
+def test_check_baseline_falsy_non_mapping_exits_2():
     with tempfile.TemporaryDirectory() as d:
         bad = Path(d) / "falsy.yaml"
-        # An empty list is falsy; it must hit the same shape error as a
-        # non-empty one, not be coerced to an empty mapping.
+        # An empty list is falsy but must hit the same mapping error as a
+        # non-empty one rather than be coerced to an empty mapping.
         bad.write_text("extensions: []\n", encoding="utf-8")
         r = subprocess.run(
             [sys.executable, str(CHECK_BASELINE), str(bad)],
@@ -538,10 +538,10 @@ if __name__ == "__main__":
          test_check_baseline_flags_missing_disable),
         ("test_check_baseline_rejects_string_enabled",
          test_check_baseline_rejects_string_enabled),
-        ("test_check_baseline_wrong_shape_exits_2",
-         test_check_baseline_wrong_shape_exits_2),
-        ("test_check_baseline_falsy_shape_exits_2",
-         test_check_baseline_falsy_shape_exits_2),
+        ("test_check_baseline_non_mapping_exits_2",
+         test_check_baseline_non_mapping_exits_2),
+        ("test_check_baseline_falsy_non_mapping_exits_2",
+         test_check_baseline_falsy_non_mapping_exits_2),
         ("test_check_baseline_help", test_check_baseline_help),
         ("test_check_baseline_missing_pyyaml_exits_2",
          test_check_baseline_missing_pyyaml_exits_2),

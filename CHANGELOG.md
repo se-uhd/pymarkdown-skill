@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.7 — 2026-09-27
+
+- `src/check_baseline.py`: the exit-code docstring says "the wrong
+  structure" and a comment says "the mapping check" where both said
+  "shape", which the consuming ai-slop-skill repo now lists as a word
+  to replace. `tests/run_smoke.py` names the two tests of that exit code
+  after the mapping check. The 0.2.0 and 0.2.1 entries below say
+  "non-mapping" where they said "shape". No behavior change.
+
 ## 0.2.6 — 2026-09-15
 
 - `src/refresh_vendor.py` and `src/_vendor/pyjson5/__init__.py`: the
@@ -63,7 +72,7 @@
   on a file (e.g. the 0.9.37 crash on a leading `---` without a final
   newline), the wrapper still prints its pre-pass and schema findings
   before exiting 2.
-- `src/check_baseline.py`: falsy non-mapping shapes (`extensions: []`,
+- `src/check_baseline.py`: falsy non-mappings (`extensions: []`,
   a `false` document) now exit 2 like their truthy counterparts.
 - `sync/sync_to_skill.sh`: verifies every sync source exists before
   deleting anything in the target; the version stamp trusts git
@@ -92,8 +101,8 @@
   accepting any later `---` as a closer; a bare leading thematic break
   is no longer flagged.
 - `src/check_baseline.py`: extensions must be enabled with a boolean
-  `true` (PyMarkdown ignores truthy non-booleans); wrong-shaped yaml
-  (non-mapping document or sections) exits 2 with a message instead of
+  `true` (PyMarkdown ignores truthy non-booleans); yaml with a
+  non-mapping document or section exits 2 with a message instead of
   an uncaught traceback; `--help` works; a missing PyYAML exits 2.
 - `src/refresh_vendor.py`: the `_vendor/` swap uses two renames so the
   old tree is never deleted before the new one is in place, and an
