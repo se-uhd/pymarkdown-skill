@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Workflow actions, such as actions/checkout and actions/setup-python.
+  # This does not cover the python-version input of setup-python.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The vendored PyMarkdown tree, pinned in src/vendor-requirements.txt.
+  # Dependabot only edits the pins, so the smoke test that compares them
+  # with _vendor/NOTICE fails on its pull requests until the tree is
+  # rebuilt on the branch:
+  #   python3 src/refresh_vendor.py --requirements src/vendor-requirements.txt
+  # One group, because the pins are installed and vendored together.
+  - package-ecosystem: pip
+    directory: /src
+    schedule:
+      interval: weekly
+    groups:
+      vendored:
+        patterns: ["*"]
+    ignore:
+      # 0.9.41 reports md029 on correctly numbered ordered lists (see
+      # test_pipe_in_ordered_item_keeps_numbering in tests/run_smoke.py).
+      - dependency-name: pymarkdownlnt
+        versions: ["0.9.41"]

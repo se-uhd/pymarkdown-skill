@@ -1,6 +1,49 @@
 # Changelog
 
-## 0.2.7 — 2026-09-27
+## 0.3.0 - 2026-10-29
+
+- `src/_vendor/`: PyMarkdown 0.9.37 to 0.9.40, with application_properties
+  0.9.3, tomli 2.5.0, toolz 1.2.0, typing_extensions 4.16.0, and wcwidth
+  0.9.4 (pyjson5 2.0.1 in NOTICE only, since the shim replaces it).
+  PyMarkdown 0.9.40 adds seven rules that are on by default: MD049,
+  MD050, MD051, MD053, MD054, MD059, and MD060. The latest release,
+  0.9.41, is skipped because it reports md029 on a correctly numbered
+  ordered list when an item that contains a pipe is followed by a
+  nested list. The crashes documented in `lint_markdown.py` still occur
+  in 0.9.41.
+- `src/lint_markdown.py`: the wrapper passes `--disable-rules md060`
+  (table-column-style) to pymarkdown unless the config sets
+  `enabled: true` for it. No md060 style accepts the common layout of
+  spaced cells over an unspaced `|---|` delimiter row, the rendered
+  table is the same either way, and the rule has no `--fix`. On the
+  tracked Markdown of the consuming skills it caused 99 of the 100 new
+  findings. Consuming skills need no config change, and the baseline
+  that `check_baseline.py` verifies is unchanged.
+- `src/refresh_vendor.py`: `--requirements FILE` installs exact pins,
+  and every successful refresh writes the vendored package set to
+  `src/vendor-requirements.txt`. Source builds skip pip's wheel cache
+  and set `WCWIDTH_NO_EXTENSION=1`, because wcwidth 0.9 otherwise builds
+  an optional C extension that the compiled-extension guard rejects.
+- `.github/dependabot.yml`: weekly grouped updates for the workflow
+  actions and for the pins in `src/vendor-requirements.txt`, skipping
+  pymarkdownlnt 0.9.41.
+- `.github/workflows/smoke.yml`: `actions/checkout` v7,
+  `actions/setup-python` v7, and Python 3.15.
+- `src/lint_markdown.py`: the docstring gives the reason for the
+  disabled plugins without naming one skill's report template. The
+  crash notes name 0.9.37 through 0.9.41.
+- `tests/run_smoke.py`: five new tests (35 total) check that the pins
+  match `_vendor/NOTICE`, that `--requirements` with a missing file
+  exits 2, that a mixed-style table passes under a config that does not
+  mention md060, that `enabled: true` under `md060` or
+  `table-column-style` turns the rule back on, and that a pipe in an
+  ordered-list item does not trigger md029.
+- Docs: the README describes the pin file and the Dependabot workflow.
+  The README, this changelog, `tests/run_smoke.py`, and the dirty-tree
+  warning of `sync/sync_to_skill.sh` no longer contain literal em-dash
+  or ellipsis glyphs.
+
+## 0.2.7 - 2026-09-27
 
 - `src/check_baseline.py`: the exit-code docstring says "the wrong
   structure" and a comment says "the mapping check" where both said
@@ -9,7 +52,7 @@
   after the mapping check. The 0.2.0 and 0.2.1 entries below say
   "non-mapping" where they said "shape". No behavior change.
 
-## 0.2.6 — 2026-09-15
+## 0.2.6 - 2026-09-15
 
 - `src/refresh_vendor.py` and `src/_vendor/pyjson5/__init__.py`: the
   pyjson5 shim docstring restated without a semicolon that joins
@@ -19,7 +62,7 @@
   the text is a string constant rather than a comment. No behavior
   change.
 
-## 0.2.5 — 2026-09-15
+## 0.2.5 - 2026-09-15
 
 - `src/lint_markdown.py`, `src/check_baseline.py`, and
   `src/refresh_vendor.py`: docstrings and comments restated without
@@ -29,13 +72,13 @@
   now gives its steps as a numbered list in the order the code runs
   them. No behavior change.
 
-## 0.2.4 — 2026-09-01
+## 0.2.4 - 2026-09-01
 
 - `src/refresh_vendor.py`: two comments restated without literal em-dash
   glyphs; no behavior change. (Same sweep as 0.2.3, which had covered
   only `lint_markdown.py`.)
 
-## 0.2.3 — 2026-09-01
+## 0.2.3 - 2026-09-01
 
 - `src/lint_markdown.py`: docstrings and comments restated without
   literal em-dash glyphs and without "surface" as a verb; no behavior
@@ -44,10 +87,10 @@
   `actions/setup-python` to v6 (off Node.js 20), and pin Python to
   the latest stable (3.14), matching the consuming skills' CI.
 
-## 0.2.2 — 2026-06-10
+## 0.2.2 - 2026-06-10
 
 - `src/lint_markdown.py`: the config is read in binary so PyYAML's BOM
-  detection applies — a UTF-16 config, which pymarkdown itself accepts,
+  detection applies. A UTF-16 config, which pymarkdown itself accepts,
   no longer crashes the wrapper with an uncaught UnicodeDecodeError.
   The `unclosed-frontmatter` message under `allow_blank_lines: true` no
   longer claims pymarkdown "silently" demotes the block; in that mode
@@ -61,12 +104,12 @@
   longer stamps `unknown` spuriously.
 - `tests/run_smoke.py`: UTF-16 config regression test (30 total).
 
-## 0.2.1 — 2026-06-10
+## 0.2.1 - 2026-06-10
 
 - `src/lint_markdown.py` pre-pass: frontmatter handling now follows the
-  config handed to pymarkdown — no `unclosed-frontmatter` when the
-  front-matter extension is not enabled, and `allow_blank_lines: true`
-  is respected. Structurally closed blocks are YAML-validated the same
+  config handed to pymarkdown, so `unclosed-frontmatter` is not reported
+  when the front-matter extension is not enabled, and
+  `allow_blank_lines: true` is respected. Structurally closed blocks are YAML-validated the same
   way pymarkdown validates them, so fences inside a block pymarkdown
   demotes to body text are tracked again. When pymarkdown itself fails
   on a file (e.g. the 0.9.37 crash on a leading `---` without a final
@@ -81,11 +124,11 @@
   of that repository's HEAD; the nested-`.syncignore` guard no longer
   misses a final line lacking a trailing newline.
 - `tests/run_smoke.py`: six new tests (28 total), plus a test for the
-  0.2.0 PyYAML import guard in `check_baseline.py` (29 total) — run via
-  `python -S` against a copy with no `_vendor/` sibling, so the import
-  failure is deterministic on hosts with PyYAML installed.
+  0.2.0 PyYAML import guard in `check_baseline.py` (29 total). That test
+  runs via `python -S` against a copy with no `_vendor/` sibling, so the
+  import failure is deterministic on hosts with PyYAML installed.
 
-## 0.2.0 — 2026-06-10
+## 0.2.0 - 2026-06-10
 
 - `src/lint_markdown.py`: invoke PyMarkdown with the `explicit`
   return-code scheme and check the codes it actually produces. The
@@ -97,8 +140,8 @@
   tilde fences and the 1–3 spaces of indentation CommonMark allows, and
   no longer treats a backtick run with backticks in its info string as
   an opener. `unclosed-frontmatter` now mirrors PyMarkdown's actual
-  rule — frontmatter is abandoned at the first blank line — instead of
-  accepting any later `---` as a closer; a bare leading thematic break
+  rule, which abandons frontmatter at the first blank line, instead of
+  accepting any later `---` as a closer. A bare leading thematic break
   is no longer flagged.
 - `src/check_baseline.py`: extensions must be enabled with a boolean
   `true` (PyMarkdown ignores truthy non-booleans); yaml with a
@@ -125,7 +168,7 @@
   README describes the sync-set/`.syncignore` mechanism and the new
   version stamp accurately.
 
-## 0.1.0 — 2026-05-15
+## 0.1.0 - 2026-05-15
 
 Initial release.
 
