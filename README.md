@@ -29,10 +29,10 @@ files are copied into each skill's `scripts/` directory by `sync_to_skill.sh`:
 sync/sync_to_skill.sh --target /path/to/skill/scripts/
 ```
 
-The sync overwrites `lint_markdown.py`, `refresh_vendor.py`,
-`check_baseline.py`, `_vendor/`, and `bundled_licenses/` — a hardcoded
-list in the script. The files each skill owns — `schema_checks.py`,
-`lint_markdown.yaml`, and `tests/` — are never part of that list;
+The sync overwrites the paths on a list hardcoded in the script:
+`lint_markdown.py`, `refresh_vendor.py`, `check_baseline.py`,
+`_vendor/`, and `bundled_licenses/`. Each skill owns `schema_checks.py`,
+`lint_markdown.yaml`, and `tests/`, which are never on that list.
 `sync/.syncignore` records them, and the script refuses to run if the
 two sets ever overlap or if a `.syncignore` entry is nested inside a
 synced directory. The target directory must contain a
@@ -50,7 +50,7 @@ linter: `scripts/schema_checks.py`. The linter loads it at startup via
 `importlib`; if missing, the linter runs without skill-specific checks.
 
 ```python
-# scripts/schema_checks.py — per-skill
+# scripts/schema_checks.py, one per skill
 SKILL_NAME = "ai-slop"   # shown in --help
 
 def schema_findings(text, path):
@@ -83,6 +83,7 @@ src/
   refresh_vendor.py           maintainer-only; rebuilds _vendor/ and NOTICE
   check_baseline.py           asserts a skill yaml carries the baseline
   lint_markdown.default.yaml  baseline PyMarkdown config (informational)
+  vendor-requirements.txt     exact pins of the vendored packages
   _vendor/                    vendored PyMarkdown tree + NOTICE
   bundled_licenses/           LICENSE texts for wheels that ship none
 sync/
@@ -97,16 +98,33 @@ tests/
 Maintainer-only. End users never run this.
 
 ```bash
-python3 src/refresh_vendor.py --version pymarkdownlnt==0.9.37
+python3 src/refresh_vendor.py --requirements src/vendor-requirements.txt
+python3 src/refresh_vendor.py --version pymarkdownlnt==0.9.40
 ```
 
-The script creates a clean venv, installs `pymarkdownlnt` with
-`--no-binary :all:`, copies the resolved tree into `_vendor/`, replaces
-`pyjson5/` with a stdlib shim (the CLI is always invoked with
-`--no-json5`), strips `__pycache__`, asserts no compiled extensions
-landed, and regenerates `_vendor/NOTICE` from each package's dist-info
-plus the manual entries in `bundled_licenses/`. If any package yields
-no license text, the script aborts before touching `_vendor/`.
+The first command rebuilds the tree from the exact pins in
+`src/vendor-requirements.txt`. The second installs the given PyMarkdown
+release, or the latest one without `--version`, and resolves its
+dependencies afresh. Either way the script creates a clean venv,
+installs with `--no-binary :all:` and with optional C extensions turned
+off, copies the resolved tree into `_vendor/`, replaces `pyjson5/` with
+a stdlib shim (the CLI is always invoked with `--no-json5`), strips
+`__pycache__`, asserts no compiled extensions landed, and regenerates
+`_vendor/NOTICE` from each package's dist-info plus the manual entries
+in `bundled_licenses/`. It then rewrites `src/vendor-requirements.txt`
+with the versions it vendored. If any package yields no license text,
+the script aborts before touching `_vendor/`.
+
+Dependabot (`.github/dependabot.yml`) checks every week for new
+releases of the pinned packages and of the workflow actions. A pull
+request for the vendored packages changes only the pins, so the smoke
+test that compares them with `_vendor/NOTICE` fails until the tree is
+rebuilt with the first command on that branch. A new PyMarkdown release
+can add rules that are on by default, so run the consuming skills'
+documents through the rebuilt linter before syncing it into them. A new
+rule that reports only source formatting, which renders the same, goes
+into `WRAPPER_DISABLED_RULES` in `lint_markdown.py`, so the skills do
+not have to change their configs.
 
 ## Testing
 

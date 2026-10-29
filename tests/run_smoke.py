@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""run_smoke.py — pymarkdown-skill upstream smoke tests.
+"""run_smoke.py: pymarkdown-skill upstream smoke tests.
 
 Exercises the canonical lint_markdown.py, check_baseline.py, and
-refresh_vendor.py via subprocess (refresh_vendor.py only as far as its
---help; the full vendoring flow needs the network). Skill-specific
-schema checks are covered in each consuming skill's own test suite.
+refresh_vendor.py via subprocess. refresh_vendor.py runs only as far as
+its --help and argument checks, because the full vendoring flow needs
+the network. Instead, a static check confirms that the pins in
+vendor-requirements.txt match the vendored tree. Skill-specific schema
+checks are covered in each consuming skill's own test suite.
 
 Exit codes
 ----------
   0  all tests passed.
   1  one or more tests failed.
 """
+import re
 import subprocess
 import sys
 import tempfile
@@ -21,6 +24,9 @@ SRC = HERE.parent / "src"
 LINT = SRC / "lint_markdown.py"
 CHECK_BASELINE = SRC / "check_baseline.py"
 DEFAULT_YAML = SRC / "lint_markdown.default.yaml"
+REFRESH_VENDOR = SRC / "refresh_vendor.py"
+VENDOR_REQUIREMENTS = SRC / "vendor-requirements.txt"
+VENDOR_NOTICE = SRC / "_vendor" / "NOTICE"
 
 
 def run_lint(md_path, extra=()):
@@ -135,7 +141,7 @@ def test_tilde_fence_containing_backticks_is_clean():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "nested.md"
         # A literal ``` line inside a closed tilde fence is content, not
-        # an opener — the canonical reason tilde fences exist.
+        # an opener, which is the canonical reason tilde fences exist.
         p.write_text(
             "# Heading\n\n~~~markdown\n```python\nprint('hi')\n```\n~~~\n",
             encoding="utf-8",
@@ -258,8 +264,8 @@ def test_invalid_yaml_frontmatter_fences_tracked():
         p = Path(d) / "invalid_fm.md"
         # The block is structurally closed but "```" is YAML-invalid as
         # frontmatter (a bare string), so pymarkdown re-parses the whole
-        # block as body text — making line 2 a real fence opener that
-        # never closes.
+        # block as body text, and line 2 becomes a real fence opener
+        # that never closes.
         p.write_text("---\n```\n---\ntext\n", encoding="utf-8")
         rc, out, _ = run_lint(p)
         assert rc == 1
@@ -302,14 +308,64 @@ def test_utf16_config_is_honored_not_crashed():
 def test_prepass_findings_survive_pymarkdown_crash():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "no_newline.md"
-        # pymarkdown 0.9.37 crashes on a leading --- without a final
-        # newline; the wrapper must exit 2 but still print the pre-pass
-        # diagnosis instead of swallowing it.
+        # pymarkdown 0.9.37 through 0.9.41 crash on a leading --- without
+        # a final newline. The wrapper must exit 2 but still print the
+        # pre-pass diagnosis instead of swallowing it.
         p.write_bytes(b"---\ntitle: hi")
         rc, out, err = run_lint(p)
         assert rc == 2, f"expected 2, got {rc}\nstdout:{out}\nstderr:{err}"
         assert "unclosed-frontmatter" in out, \
             f"pre-pass finding suppressed:\n{out}\n{err}"
+
+
+MIXED_TABLE_MD = "# Heading\n\n| Field | Content |\n|---|---|\n| a | b |\n"
+
+
+def test_wrapper_disables_md060_without_config():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "table.md"
+        # Spaced cells over an unspaced delimiter row, the most common
+        # hand-written layout. md060 flags it, and the default config
+        # does not mention md060, so only the wrapper keeps it quiet.
+        p.write_text(MIXED_TABLE_MD, encoding="utf-8")
+        rc, out, _ = run_lint(p)
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_pipe_in_ordered_item_keeps_numbering():
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "list.md"
+        # pymarkdown 0.9.41 misnumbers an ordered list when an item that
+        # contains a pipe, even inside a code span, is followed by a
+        # nested list, and reports md029 on this correctly numbered
+        # list. 0.9.40 is vendored until a later release passes.
+        p.write_text(
+            "# Heading\n\n1. one\n\n2. two\n\n3. three `a | b` here\n"
+            "   - a\n",
+            encoding="utf-8",
+        )
+        rc, out, _ = run_lint(p)
+        assert rc == 0, f"expected 0, got {rc}:\n{out}"
+
+
+def test_config_can_reenable_md060():
+    for section in ("md060", "table-column-style"):
+        with tempfile.TemporaryDirectory() as d:
+            cfg = Path(d) / "cfg.yaml"
+            cfg.write_text(
+                DEFAULT_YAML.read_text(encoding="utf-8")
+                + f"  {section}:\n    enabled: true\n",
+                encoding="utf-8",
+            )
+            p = Path(d) / "table.md"
+            p.write_text(MIXED_TABLE_MD, encoding="utf-8")
+            r = subprocess.run(
+                [sys.executable, str(LINT), "--config", str(cfg), str(p)],
+                capture_output=True, text=True,
+            )
+            assert r.returncode == 1, \
+                f"{section}: expected 1, got {r.returncode}\n{r.stdout}"
+            assert "md060" in r.stdout, f"{section}: opt-in ignored"
 
 
 # --- schema_checks integration ---
@@ -454,8 +510,8 @@ def test_check_baseline_missing_pyyaml_exits_2():
     # The import guard must turn a missing PyYAML into exit 2 with a
     # message, not an ImportError traceback (exit 1). Copy the script
     # where no _vendor/ sibling exists and run it with -S so the host's
-    # site-packages PyYAML (if any) is not importable either — the only
-    # deterministic way to exercise the guard on an arbitrary host.
+    # site-packages PyYAML (if any) is not importable either. Only that
+    # combination exercises the guard deterministically on any host.
     with tempfile.TemporaryDirectory() as d:
         script = Path(d) / "check_baseline.py"
         script.write_bytes(CHECK_BASELINE.read_bytes())
@@ -475,11 +531,60 @@ def test_check_baseline_missing_pyyaml_exits_2():
 
 def test_refresh_vendor_help():
     r = subprocess.run(
-        [sys.executable, str(SRC / "refresh_vendor.py"), "--help"],
+        [sys.executable, str(REFRESH_VENDOR), "--help"],
         capture_output=True, text=True,
     )
     assert r.returncode == 0
     assert "Refresh the vendored" in r.stdout
+
+
+def test_refresh_vendor_missing_requirements_exits_2():
+    with tempfile.TemporaryDirectory() as d:
+        absent = Path(d) / "absent-requirements.txt"
+        r = subprocess.run(
+            [sys.executable, str(REFRESH_VENDOR), "--requirements",
+             str(absent)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 2, \
+            f"expected 2, got {r.returncode}\n{r.stderr}"
+        assert "not found" in r.stderr, r.stderr
+
+
+def normalize_dist_name(name):
+    """PEP 503: names that differ only in case or in runs of `-_.` match."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def test_vendor_requirements_match_notice():
+    # Dependabot bumps the pins in vendor-requirements.txt but cannot
+    # rebuild _vendor/, so the two disagree until refresh_vendor.py runs
+    # on the pull request branch. NOTICE records what is vendored.
+    pinned = {}
+    for line in VENDOR_REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, sep, version = line.partition("==")
+        assert sep, f"not an exact pin: {line!r}"
+        pinned[normalize_dist_name(name)] = version.strip()
+    vendored = {}
+    in_fence = False
+    for line in VENDOR_NOTICE.read_text(encoding="utf-8").splitlines():
+        # License texts sit inside fences and may contain their own
+        # `## ` headings.
+        if line.startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and line.startswith("## "):
+            name, version = line[3:].split()
+            vendored[normalize_dist_name(name)] = version
+    assert pinned == vendored, (
+        "vendor-requirements.txt and _vendor/NOTICE disagree\n"
+        f"  pinned:   {sorted(set(pinned.items()) - set(vendored.items()))}\n"
+        f"  vendored: {sorted(set(vendored.items()) - set(pinned.items()))}\n"
+        "rebuild with: python3 src/refresh_vendor.py --requirements "
+        "src/vendor-requirements.txt"
+    )
 
 
 def test_missing_config_yields_clear_error():
@@ -529,6 +634,11 @@ if __name__ == "__main__":
          test_utf16_config_is_honored_not_crashed),
         ("test_prepass_findings_survive_pymarkdown_crash",
          test_prepass_findings_survive_pymarkdown_crash),
+        ("test_wrapper_disables_md060_without_config",
+         test_wrapper_disables_md060_without_config),
+        ("test_config_can_reenable_md060", test_config_can_reenable_md060),
+        ("test_pipe_in_ordered_item_keeps_numbering",
+         test_pipe_in_ordered_item_keeps_numbering),
         ("test_schema_checks_loaded_when_present",
          test_schema_checks_loaded_when_present),
         ("test_runs_without_schema_checks", test_runs_without_schema_checks),
@@ -546,6 +656,10 @@ if __name__ == "__main__":
         ("test_check_baseline_missing_pyyaml_exits_2",
          test_check_baseline_missing_pyyaml_exits_2),
         ("test_refresh_vendor_help", test_refresh_vendor_help),
+        ("test_refresh_vendor_missing_requirements_exits_2",
+         test_refresh_vendor_missing_requirements_exits_2),
+        ("test_vendor_requirements_match_notice",
+         test_vendor_requirements_match_notice),
         ("test_missing_config_yields_clear_error",
          test_missing_config_yields_clear_error),
     ]

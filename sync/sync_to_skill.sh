@@ -147,7 +147,7 @@ if [[ -n "$toplevel" && "$toplevel" -ef "$upstream" ]]; then
     && [[ -n "$(git -C "$upstream" status --porcelain 2>/dev/null)" ]]; then
         sha="${sha}-dirty"
         echo "sync_to_skill.sh: warning: upstream working tree has" \
-             "uncommitted changes; stamping ${sha:0:12}…-dirty" >&2
+             "uncommitted changes; stamping ${sha:0:12}...-dirty" >&2
     fi
 else
     sha=unknown
