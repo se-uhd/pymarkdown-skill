@@ -7,7 +7,7 @@ application_properties==0.9.3
 Columnar==1.4.1
 py-walk==0.3.3
 pyjson5==2.0.1
-pymarkdownlnt==0.9.40
+pymarkdownlnt==0.9.42
 PyYAML==6.0.3
 sly==0.5
 tomli==2.5.0
