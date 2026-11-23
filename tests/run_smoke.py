@@ -335,10 +335,11 @@ def test_wrapper_disables_md060_without_config():
 def test_pipe_in_ordered_item_keeps_numbering():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "list.md"
-        # pymarkdown 0.9.41 and 0.9.42 misnumber an ordered list when an
-        # item that contains a pipe, even inside a code span, is followed
-        # by a nested list, and report md029 on this correctly numbered
-        # list. 0.9.40 is vendored until a later release passes.
+        # With markdown-tables, pymarkdown 0.9.41 and 0.9.42 report md029
+        # on a loose ordered list in which an item after the first contains
+        # a pipe, even inside a code span, and --fix inserts a second
+        # number into that item (jackdewinter/pymarkdown#1756). 0.9.40 is
+        # vendored until a later release passes.
         p.write_text(
             "# Heading\n\n1. one\n\n2. two\n\n3. three `a | b` here\n"
             "   - a\n",

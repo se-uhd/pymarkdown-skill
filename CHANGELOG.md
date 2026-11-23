@@ -7,8 +7,9 @@
   3.15 ships no `top_level.txt`, so a refresh there recorded pip as
   vendored.
 - PyMarkdown stays at 0.9.40. Like 0.9.41, 0.9.42 reports md029 on some
-  correctly numbered ordered lists, so Dependabot no longer proposes
-  either release.
+  correctly numbered ordered lists
+  ([pymarkdown#1756](https://github.com/jackdewinter/pymarkdown/issues/1756)),
+  so Dependabot no longer proposes either release.
 
 ## 0.3.0 - 2026-10-29
 
