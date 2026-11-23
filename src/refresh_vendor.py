@@ -90,6 +90,12 @@ SKIP_ENTRIES = frozenset({
     "wheel", "distutils-precedence.pth", "__pycache__",
 })
 
+# Distributions that the venv brings along to install the packages. They
+# are never vendored, so NOTICE and vendor-requirements.txt leave them out
+# by name. The check on top-level entries in collect_notice() does not
+# catch them: pip 26 ships no top_level.txt.
+INSTALLER_DISTS = frozenset({"pip", "setuptools", "wheel"})
+
 # Distribution-name (case-insensitive) -> SPDX-style label overrides.
 # Used when a wheel's METADATA declares a license that disagrees with the
 # bundled LICENSE text, or when METADATA omits the License: field but the
@@ -221,6 +227,8 @@ def collect_notice(
         )
         name = (msg.get("Name") or "").strip()
         version = (msg.get("Version") or "").strip()
+        if name.lower() in INSTALLER_DISTS:
+            continue
         # License-Expression (PEP 639) is canonical. The deprecated
         # free-text License field is the fallback, whichever order the
         # wheel's build backend emitted them in.

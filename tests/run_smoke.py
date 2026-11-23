@@ -335,9 +335,9 @@ def test_wrapper_disables_md060_without_config():
 def test_pipe_in_ordered_item_keeps_numbering():
     with tempfile.TemporaryDirectory() as d:
         p = Path(d) / "list.md"
-        # pymarkdown 0.9.41 misnumbers an ordered list when an item that
-        # contains a pipe, even inside a code span, is followed by a
-        # nested list, and reports md029 on this correctly numbered
+        # pymarkdown 0.9.41 and 0.9.42 misnumber an ordered list when an
+        # item that contains a pipe, even inside a code span, is followed
+        # by a nested list, and report md029 on this correctly numbered
         # list. 0.9.40 is vendored until a later release passes.
         p.write_text(
             "# Heading\n\n1. one\n\n2. two\n\n3. three `a | b` here\n"
@@ -556,10 +556,8 @@ def normalize_dist_name(name):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def test_vendor_requirements_match_notice():
-    # Dependabot bumps the pins in vendor-requirements.txt but cannot
-    # rebuild _vendor/, so the two disagree until refresh_vendor.py runs
-    # on the pull request branch. NOTICE records what is vendored.
+def read_pins():
+    """Return {normalized name: version} from vendor-requirements.txt."""
     pinned = {}
     for line in VENDOR_REQUIREMENTS.read_text(encoding="utf-8").splitlines():
         line = line.strip()
@@ -568,6 +566,11 @@ def test_vendor_requirements_match_notice():
         name, sep, version = line.partition("==")
         assert sep, f"not an exact pin: {line!r}"
         pinned[normalize_dist_name(name)] = version.strip()
+    return pinned
+
+
+def read_notice_packages():
+    """Return {normalized name: version} from the sections of NOTICE."""
     vendored = {}
     in_fence = False
     for line in VENDOR_NOTICE.read_text(encoding="utf-8").splitlines():
@@ -578,12 +581,34 @@ def test_vendor_requirements_match_notice():
         elif not in_fence and line.startswith("## "):
             name, version = line[3:].split()
             vendored[normalize_dist_name(name)] = version
+    return vendored
+
+
+def test_vendor_requirements_match_notice():
+    # Dependabot bumps the pins in vendor-requirements.txt but cannot
+    # rebuild _vendor/, so the two disagree until refresh_vendor.py runs
+    # on the pull request branch. NOTICE records what is vendored.
+    pinned = read_pins()
+    vendored = read_notice_packages()
     assert pinned == vendored, (
         "vendor-requirements.txt and _vendor/NOTICE disagree\n"
         f"  pinned:   {sorted(set(pinned.items()) - set(vendored.items()))}\n"
         f"  vendored: {sorted(set(vendored.items()) - set(pinned.items()))}\n"
         "rebuild with: python3 src/refresh_vendor.py --requirements "
         "src/vendor-requirements.txt"
+    )
+
+
+def test_notice_leaves_out_installer_tools():
+    # The venv that refresh_vendor.py installs into also holds pip, and
+    # pip 26 ships no top_level.txt, so a refresh on Python 3.15 recorded
+    # it in NOTICE and pinned it as if it were vendored.
+    installers = {"pip", "setuptools", "wheel"}
+    in_pins = sorted(installers & set(read_pins()))
+    in_notice = sorted(installers & set(read_notice_packages()))
+    assert not in_pins and not in_notice, (
+        f"installer tools recorded as vendored: pins {in_pins}, "
+        f"NOTICE {in_notice}"
     )
 
 
@@ -660,6 +685,8 @@ if __name__ == "__main__":
          test_refresh_vendor_missing_requirements_exits_2),
         ("test_vendor_requirements_match_notice",
          test_vendor_requirements_match_notice),
+        ("test_notice_leaves_out_installer_tools",
+         test_notice_leaves_out_installer_tools),
         ("test_missing_config_yields_clear_error",
          test_missing_config_yields_clear_error),
     ]

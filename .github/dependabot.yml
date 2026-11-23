@@ -24,7 +24,7 @@ updates:
       vendored:
         patterns: ["*"]
     ignore:
-      # 0.9.41 reports md029 on correctly numbered ordered lists (see
-      # test_pipe_in_ordered_item_keeps_numbering in tests/run_smoke.py).
+      # 0.9.41 and 0.9.42 report md029 on correctly numbered ordered lists
+      # (see test_pipe_in_ordered_item_keeps_numbering in tests/run_smoke.py).
       - dependency-name: pymarkdownlnt
-        versions: ["0.9.41"]
+        versions: ["0.9.41", "0.9.42"]
