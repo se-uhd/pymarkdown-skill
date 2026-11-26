@@ -8,9 +8,9 @@ Columnar==1.4.1
 py-walk==0.3.3
 pyjson5==2.0.1
 pymarkdownlnt==0.9.40
-PyYAML==6.0.3
+PyYAML==6.0.4
 sly==0.5
 tomli==2.5.0
 toolz==1.2.0
 typing_extensions==4.16.0
-wcwidth==0.9.4
+wcwidth==0.9.5
